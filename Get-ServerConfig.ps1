@@ -176,8 +176,8 @@ PS> Get-ServerConfig -ServerName 'EDR1SQL01S003.fs.local\DBA'
 }
 
 
-$MyServer  = 'EDR1SQL01T001.fs.local'   # Name of the old server to be replaced
-$RepServer = 'EDR1SQL01T001.fs.local'   # Name for the new replacement server
+$MyServer  = 'PBG1SQL01T304.fs.local'   # Name of the old server to be replaced
+$RepServer = 'PBG2SQL01T304.fs.local'   # Name for the new replacement server
 $OutputDir = "C:\Temp"                  # Directory where the output is to be stored
 
 $Info = Get-ServerConfig -OldServerName $MyServer -NewServerName $RepServer 

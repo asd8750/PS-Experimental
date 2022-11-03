@@ -14,11 +14,9 @@ When executed from an S6 plant ODS instance, this script will determine the AG/D
 is submitted to each component SQL instance for additional status information.  
 Once obtained, the combination status is saved to a central database.
 
-
 .EXAMPLE
 
 PS> Get-FSDagStatus -FullInstanceName 'EDR1SQL01S003.fs.local\DBA'
-
 #>
     [CmdletBinding()]
     Param (
@@ -52,7 +50,7 @@ PS> Get-FSDagStatus -FullInstanceName 'EDR1SQL01S003.fs.local\DBA'
         $FetchList[$S6OdsInstance] = New-Object PSObject -Property @{
             Instance = $S6OdsInstance
             Location = "ODS"
-            Status = "Fetch"
+            Status   = "Fetch"
         }
 
         $InstCompleted = @{};
@@ -122,7 +120,6 @@ PS> Get-FSDagStatus -FullInstanceName 'EDR1SQL01S003.fs.local\DBA'
         $DBRows | Sort-Object -Property InDAG, DAGName, AGName, DatabaseName, SourceInst | FT
     }    
 }
-
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
