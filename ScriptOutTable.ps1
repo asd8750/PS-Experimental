@@ -72,6 +72,8 @@ function Get-FSSQLTableCreateScript {
     }
 
 
+    $srcTableName = "[$($TableSchema)].[$($TableName)]"
+
     # Setup flag for controlling name changes
     #
     $flgSameSchema = ( $TableSchema -ieq $StgTableSchema)
@@ -100,7 +102,9 @@ function Get-FSSQLTableCreateScript {
 
     $SMOcols = $SMOtbl.Columns
 
-    $ColNames = $SMOcols | Sort-Object ID | Select-Object -property Name 
+    #$ColNames = $SMOcols | Sort-Object ID | Select-Object -property Name 
+
+    $ColInfo = $SMOcols | Sort-Object ID | Select-Object -Property Name, ID, Identity, InPrimaryKey, Nullable, DataType
 
     # Script out the source table and indexes
     #
@@ -215,13 +219,17 @@ function Get-FSSQLTableCreateScript {
     #
     $OFS = "`r`n"
     $retValue = [PSCustomObject]@{
+        SrcTableSchema = $TableSchema
+        SrcTableName   = $TableName
+        SrcFullTable  = $srcTableName
         DestFullTable = $dstTableName
         Drop    = $dScript
         Create  = $cScript
         dstTable = $dstTableName
         sOut1   = $sOut1 
         sOut2   = $sOut2 
-        ColNames = $ColNames
+        #ColNames = $ColNames
+        ColInfo  = $ColInfo
     }
 
     return $retValue
@@ -239,35 +247,82 @@ function Install_PVTables {
         [Parameter(Mandatory=$False)][string] $StgTableName = $TableName,
         [Parameter(Mandatory=$False)][string] $FileGroup,
         [Parameter(Mandatory=$False)][string] $PtSchemeName, 
-        [Parameter(Mandatory=$False)][string] $PtColumnName
+        [Parameter(Mandatory=$False)][string] $PtColumnName,
+        [Parameter(Mandatory=$False)][int] $PVCycle = 1
     )
 
     try {
-
+        #
+        #   Validate the 
+        $tblScripts = Get-FSSQLTableCreateScript -InstanceName $InstanceName -DatabaseName $DatabaseName `
+                                                -TableSchema $TableSchema -TableName $TableName `
+                                                -StgTableSchema '<<SCHEMA>>' -StgTableName '<<TABLE>>' `
+                                                -FileGroup $FileGroup -PtSchemeName $PtSchemeName -PtColumnName $PtColumnName
     }
     catch {
-
+        return $null
     }
-    finally {
 
+    #
+    #  TODO: Function to generate PV table with PVCycle
+    #
+    function local:GenPVTable {
+        param(
+            [string] $CTScript,
+            [string] $TableSchema,
+            [string] $TableName,
+            [int] $PVCycle,
+            [int] $Seq
+        )
+
+        $PVSchema = "PV_$($TableSchema)"
+        $OutScript = $CTScript -replace '<<SCHEMA>>', $PVSchema
+        $PVTableName = "$($TableName)_PV_$($PVCycle)_$($Seq)"
+        $OutScript = $Outscript -replace '<<TABLE>>', $PVTableName
+        return [PSCustomObject]@{
+            PVCreate = $OutScript
+            PVSchema = $PVSchema
+            PVTable  = $PVTableName
+        }
     }
+
+
+    #   TODO: Create Identity ==> Sequence
     #
+    $IdentityColInfo = $tblScripts.ColInfo | Where-object Identity 
+    if ($IdentityColInfo) {
+        $sqlCreateSequence = "CREATE SEQUENCE [$($TableSchema)].[seq_$($TableName)] AS BIGINT START WITH 1 INCREMENT BY 1 MINVALUE 1; `r`n"
+        $sqlAddColSequence = "ALTER TABLE [<<SCHEMA>>].[<<TABLE>>] ADD CONSTRAINT [DF_SEQ_$($IdentityColInfo.Name)] DEFAULT NEXT VALUE FOR [$($TableSchema)].[seq_$($TableName)] FOR [$($IdentityColInfo.Name)]`r`n"
+        $tblScripts.Create = $tblScripts.Create + $sqlAddColSequence
+    }
+    
+    #   TODO: Create PV Table PRE
+    #
+    $TablePRE = GenPVTable -CTScript $tblScripts.Create -TableSchema $TableSchema -TableName $TableName -PVCycle $PVCycle -Seq 0
+
+    #
+    #   TODO: Create PV Tables 1 - X
+    #
+    #   TODO: Create PV Table POST
+    #
+    #   TODO: Create PV View (Schemabinding)
+    #
+    #   TODO: Create synonym to the PV View
+    #
+    #   TODO: Create PV table Check Constraints and Check Enables
     #
 
-
-
-
+    return $tblScripts
 }
 
 
 
+# Get-FSSQLTableCreateScript -InstanceName "PBG1SQL01V001.fs.local" -DatabaseName "ReliabilityDB" `
+#                             -TableSchema "dbo" -TableName 'RCOL_TemperatureMap' `
+#                             -StgTableSchema "DBA-Stg" `
+#                             -PtSchemeName "source" -PtColumnName "DateUpdated";
 
-
-
-
-
-
-Get-FSSQLTableCreateScript -InstanceName "PBG1SQL01V001.fs.local" -DatabaseName "ReliabilityDB" `
+Install_PVTables -InstanceName "PBG1SQL01V001.fs.local" -DatabaseName "ReliabilityDB" `
                             -TableSchema "dbo" -TableName 'RCOL_TemperatureMap' `
                             -StgTableSchema "DBA-Stg" `
-                            -PtSchemeName "source" -PtColumnName "DateUpdated"
+                            -PtSchemeName "source" -PtColumnName "DateUpdated";
