@@ -1,7 +1,7 @@
 #Import-Module   SqlServer
 
 #Import-Module -Name  C:\Projects\DBA-Deployments\FS_Deployment\1.0\FS_Deployment.psd1
-#Import-Module -Name  FS_Deployment
+Import-Module -Name  FS_Deployment
 
 #
 #  ############################################################################################

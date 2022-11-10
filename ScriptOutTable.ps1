@@ -22,8 +22,9 @@
 #  -DatabaseName   - The source/destination database  
 #  -TableSchema    - Source table schema
 #  -TableName      - Source table name
+#  -StgTableSchema - Destination table schema name
 #  -StgTableName   - Destination table name
-#  -PtSchemeName   - Destination tabe partition scheme (if different from the source table)
+#  -PtSchemeName   - Destination table partition scheme (if different from the source table)
 #  -PtColumnName   - Destination table column used for partitioning
 #                       
 #  Output object contains two string properties:
@@ -36,67 +37,73 @@
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.SMOExtended") | Out-Null; 
 
 function Get-FSSQLTableCreateScript {
-param(
-    [Parameter(Mandatory=$True)][string] $InstanceName,
-    [Parameter(Mandatory=$True)][string] $DatabaseName,
-    [Parameter(Mandatory=$True)][string] $TableSchema,
-    [Parameter(Mandatory=$True)][string] $TableName,
-    [Parameter(Mandatory=$True)][string] $StgTableSchema,
-    [Parameter(Mandatory=$False)][string] $StgTableName = $TableName,
-    [Parameter(Mandatory=$False)][string] $FileGroup,
-    [Parameter(Mandatory=$False)][string] $PtSchemeName, 
-    [Parameter(Mandatory=$False)][string] $PtColumnName
+    param(
+        [Parameter(Mandatory=$True)][string] $InstanceName,
+        [Parameter(Mandatory=$True)][string] $DatabaseName,
+        [Parameter(Mandatory=$True)][string] $TableSchema,
+        [Parameter(Mandatory=$True)][string] $TableName,
+        [Parameter(Mandatory=$True)][string] $StgTableSchema,
+        [Parameter(Mandatory=$False)][string] $StgTableName = $TableName,
+        [Parameter(Mandatory=$False)][string] $FileGroup,
+        [Parameter(Mandatory=$False)][string] $PtSchemeName, 
+        [Parameter(Mandatory=$False)][string] $PtColumnName
     )
 
+    try {
+        $connStr = "Server=$InstanceName; "
+        if ($Database -ne "") {
+                $connStr = $connStr + "Database=$DatabaseName; "
+        }
 
-$connStr = "Server=$InstanceName; "
-if ($Database -ne "") {
-        $connStr = $connStr + "Database=$DatabaseName; "
-}
-
-#if ($TrustedConnection) {
-    $connStr = $connStr + "Trusted_Connection=True; "
-#}
-#else {
-#    $connStr = $connStr + "Uid=$LoginName; Pwd=$Password; "
-#}
-#$connStr = $connStr + ";Connect Timeout=$Timeout ";
-$Connection = New-Object System.Data.SqlClient.SqlConnection
-$Connection.ConnectionString = $connStr
-$Connection.Open()
-
-
-if ($Connection.State -ne 'Open' ) { return; }
-
-# Setup flag for controlling name changes
-#
-$flgSameSchema = ( $TableSchema -ieq $StgTableSchema)
-$flgSameTableName = ( $TableName -ieq $StgTableName )
-$flgChangeTableName = ( $flgSameSchema -and $flgSameTableName )
-$flgChangeConstraintName = ( $flgSameSchema )
-
-# Prepare the destination table name an patterns
-#
-if ( $flgChangeTableName ) {
-    $dstTableName = "[$($StgTableSchema)].[$($TableName)]" 
+        #if ($TrustedConnection) {
+            $connStr = $connStr + "Trusted_Connection=True; "
+        #}
+        #else {
+        #    $connStr = $connStr + "Uid=$LoginName; Pwd=$Password; "
+        #}
+        #$connStr = $connStr + ";Connect Timeout=$Timeout ";
+        $Connection = New-Object System.Data.SqlClient.SqlConnection
+        $Connection.ConnectionString = $connStr
+        $Connection.Open()
+        if ($Connection.State -ne 'Open' ) { return; }        
     }
-else {
-    $dstTableName = "[$($StgTableSchema)].[$($StgTableName)]"
+    catch {
+        return;
     }
 
-$patSrcTableName = "\[$($TableSchema)\]\.\[$($TableName)\]"
+
+    # Setup flag for controlling name changes
+    #
+    $flgSameSchema = ( $TableSchema -ieq $StgTableSchema)
+    $flgSameTableName = ( $TableName -ieq $StgTableName )
+    $flgChangeTableName = ( $flgSameSchema -and $flgSameTableName )
+    $flgChangeConstraintName = ( $flgSameSchema )
+
+    # Prepare the destination table name an patterns
+    #
+    if ( $flgChangeTableName ) {
+        $dstTableName = "[$($StgTableSchema)].[$($TableName)]" 
+        }
+    else {
+        $dstTableName = "[$($StgTableSchema)].[$($StgTableName)]"
+        }
+
+    $patSrcTableName = "\[$($TableSchema)\]\.\[$($TableName)\]"
 
 
-# Script out the drop and create scripts
-#
-$SMOserver = New-Object -TypeName Microsoft.SqlServer.Management.Smo.Server -ArgumentList $connection.DataSource
-$SMOdb = $SMOserver.Databases| Where { $_.Name -ieq $DatabaseName }
+    # Script out the drop and create scripts
+    #
+    $SMOserver = New-Object -TypeName Microsoft.SqlServer.Management.Smo.Server -ArgumentList $connection.DataSource
+    $SMOdb = $SMOserver.Databases| Where-Object { $_.Name -ieq $DatabaseName }
+    #
+    $SMOtbl = $SMOdb.Tables | Where-Object { $_.Schema -ieq $TableSchema -AND $_.Name -ieq $TableName -AND !($_.IsSystemObject) }
 
-#$SMOdb = $databases 
-$SMOtbl = $SMOdb.Tables | Where { $_.Schema -ieq $TableSchema -AND $_.Name -ieq $TableName -AND !($_.IsSystemObject) }
+    $SMOcols = $SMOtbl.Columns
 
-# Script out the source table and indexes
-#
+    $ColNames = $SMOcols | Sort-Object ID | Select-Object -property Name 
+
+    # Script out the source table and indexes
+    #
     $SmoScr = $SMOtbl[0]
 
     # Determine the primary filegroup name
@@ -163,9 +170,12 @@ $SMOtbl = $SMOdb.Tables | Where { $_.Schema -ieq $TableSchema -AND $_.Name -ieq 
     $scriptrCreate.Options.ScriptDrops = $False
     $scriptrCreate.Options.IncludeHeaders = $False
     $scriptrCreate.Options.ToFileOnly = $False
+    $scriptrCreate.Options.NoIdentities = $true
+    #$scriptrCreate.Options.NoFileGroup = $true
     $scriptrCreate.Options.Indexes = $True
     $scriptrCreate.Options.Permissions = $True
     $scriptrCreate.Options.WithDependencies = $False
+    $scriptrCreate.Options.ScriptDataCompression = $true;
     $scriptrCreate.Options.Statistics = $True
     $scriptrCreate.Options.NoIndexPartitioningSchemes = $False
     $scriptrCreate.Options.NoTablePartitioningSchemes = $False
@@ -177,8 +187,9 @@ $SMOtbl = $SMOdb.Tables | Where { $_.Schema -ieq $TableSchema -AND $_.Name -ieq 
 
     $cScript = ""
     $sOut2 = $scriptrCreate.Script($SmoScr)
-    $sOut2 | ForEach-Object { 
-        $cLine = $_ -replace "ON \[[^]]+?\](\(.+?\))?(?!\.)", "ON $($onFG)";
+    foreach ($cLine in $sOut2) {
+     
+        $cLine = $cLine -replace "ON \[[^]]+?\](\(.+?\))?(?!\.)", "ON $($onFG)";
         $cLine = $cLine -replace $patSrcTableName, $dstTableName;
 
         if ( $flgChangeConstraintName ) {
@@ -186,29 +197,77 @@ $SMOtbl = $SMOdb.Tables | Where { $_.Schema -ieq $TableSchema -AND $_.Name -ieq 
         }
         $cScript = $cScript + $cLine  + "`n";
 
-#            $cScript = $cScript + 
-#            ((($_ -replace "ON \[[^]]+?\](\(.+?\))?(?!\.)", "ON $($fileGroup)") -replace 
-#                    $patSrcTableName, $dstTableName) -replace 
-#                        " INDEX \[", " INDEX [PTI_") -replace 
-#                            "CONSTRAINT \[", "CONSTRAINT [PTC_") + "`n";
-        }
-    #Write-Output $cScript;
+        #    $cScript = $cScript + 
+        #    ((($_ -replace "ON \[[^]]+?\](\(.+?\))?(?!\.)", "ON $($fileGroup)") -replace 
+        #            $patSrcTableName, $dstTableName) -replace 
+        #                " INDEX \[", " INDEX [PTI_") -replace 
+        #                    "CONSTRAINT \[", "CONSTRAINT [PTC_") + "`n";
+    }
 
+    if ($connection) {
+        if ($Connection.State -eq 'Open' ) { 
+            $Connection.Close(); 
+        }    
+        $Connection.Dispose();
+    }
+    
+    # This ends the object scripting loop.
+    #
+    $OFS = "`r`n"
+    $retValue = [PSCustomObject]@{
+        DestFullTable = $dstTableName
+        Drop    = $dScript
+        Create  = $cScript
+        dstTable = $dstTableName
+        sOut1   = $sOut1 
+        sOut2   = $sOut2 
+        ColNames = $ColNames
+    }
 
-
-# This ends the object scripting loop.
-#
-$OFS = "`r`n"
-$retValue = "" | Select-Object -Property drop,create,swTable,sOut2
-$retValue.drop = $dScript
-$retValue.create = $cScript
-$retValue.swTable = $dstTableName
-$retValue.sOut2 = $sOut2
-return $retValue
+    return $retValue
 }
 
 
-Get-FSSQLTableCreateScript -InstanceName "PBG1SQL01V103.fs.local" -DatabaseName "Prod_Data" `
-                            -TableSchema "History" -TableName 'Box' `
-                            -StgTableSchema "ProdData" `
-                            -PtSchemeName "HistoryBox" -PtColumnName ""
+
+function Install_PVTables {
+    param(
+        [Parameter(Mandatory=$True)][string] $InstanceName,
+        [Parameter(Mandatory=$True)][string] $DatabaseName,
+        [Parameter(Mandatory=$True)][string] $TableSchema,
+        [Parameter(Mandatory=$True)][string] $TableName,
+        [Parameter(Mandatory=$True)][string] $StgTableSchema,
+        [Parameter(Mandatory=$False)][string] $StgTableName = $TableName,
+        [Parameter(Mandatory=$False)][string] $FileGroup,
+        [Parameter(Mandatory=$False)][string] $PtSchemeName, 
+        [Parameter(Mandatory=$False)][string] $PtColumnName
+    )
+
+    try {
+
+    }
+    catch {
+
+    }
+    finally {
+
+    }
+    #
+    #
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+Get-FSSQLTableCreateScript -InstanceName "PBG1SQL01V001.fs.local" -DatabaseName "ReliabilityDB" `
+                            -TableSchema "dbo" -TableName 'RCOL_TemperatureMap' `
+                            -StgTableSchema "DBA-Stg" `
+                            -PtSchemeName "source" -PtColumnName "DateUpdated"
