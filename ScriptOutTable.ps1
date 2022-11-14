@@ -168,8 +168,9 @@ function Get-FSSQLTableCreateScript {
     $scriptrCreate.Options.AppendToFile = $True
     $scriptrCreate.Options.AllowSystemObjects = $False
     $scriptrCreate.Options.ClusteredIndexes = $True
-    $scriptrCreate.Options.DriAll = $False
-    $scriptrCreate.Options.DriForeignKeys = $False
+    $scriptrCreate.Options.Default = $true
+    $scriptrCreate.Options.DriAll = $true
+    #$scriptrCreate.Options.DriForeignKeys = $False
     $scriptrCreate.Options.DriIndexes = $True
     $scriptrCreate.Options.ScriptDrops = $False
     $scriptrCreate.Options.IncludeHeaders = $False
@@ -179,6 +180,7 @@ function Get-FSSQLTableCreateScript {
     $scriptrCreate.Options.Indexes = $True
     $scriptrCreate.Options.Permissions = $True
     $scriptrCreate.Options.WithDependencies = $False
+    $scriptrCreate.Options.SchemaQualify = $true;
     $scriptrCreate.Options.ScriptDataCompression = $true;
     $scriptrCreate.Options.Statistics = $True
     $scriptrCreate.Options.NoIndexPartitioningSchemes = $False
