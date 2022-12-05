@@ -36,6 +36,8 @@
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.Smo") | Out-Null ; # Load SQL Server Management Objects 
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.SMOExtended") | Out-Null; 
 
+if ($null -eq (Get-Module SqlServer)) { Import-Module SqlServer}        # Ensure the SqlServer module is loaded
+
 function Get-FSSQLTableCreateScript {
     param(
         [Parameter(Mandatory=$True)][string] $InstanceName,
@@ -181,6 +183,7 @@ function Get-FSSQLTableCreateScript {
     $scriptrCreate.Options.Permissions = $True
     $scriptrCreate.Options.WithDependencies = $False
     $scriptrCreate.Options.SchemaQualify = $true;
+    $scriptrCreate.Options.SchemaQualifyForeignKeysReferences = $true 
     $scriptrCreate.Options.ScriptDataCompression = $true;
     $scriptrCreate.Options.Statistics = $True
     $scriptrCreate.Options.NoIndexPartitioningSchemes = $False
@@ -253,6 +256,53 @@ function Install_PVTables {
         [Parameter(Mandatory=$False)][int] $PVCycle = 1
     )
 
+    #  ###############################################################################################
+    #
+    #  Local function to generate PV table with PVCycle
+    #
+    #  ###############################################################################################
+    function local:GenPVTable {
+        param(
+            [string] $CTScript,
+            [string] $TableSchema,
+            [string] $TableName,
+            [int] $PVCycle,
+            [int] $Seq,
+            [string] $ConnStr
+        )
+
+        $PVSchema = "PV_$($TableSchema)"
+        $OutScript = $CTScript -replace '<<SCHEMA>>', $PVSchema
+        $PVTableName = "$($TableName)_PV_$($PVCycle)_$($Seq)"
+        $OutScript = $Outscript -replace '<<TABLE>>', $PVTableName
+
+        $ObjectID = (Invoke-Sqlcmd -ConnectionString $ConnStr -Query "SELECT ISNULL(OBJECT_ID('[$($PVSchema)].[$($PVTableName)]'), 0) AS ObjectID").ObjectID
+
+        return [PSCustomObject]@{
+            PVCreate = $OutScript
+            PVSchema = $PVSchema
+            PVTable  = $PVTableName
+            PVCycle  = $PVCycle
+            PVSeq    = $Seq
+            ObjectID = $ObjectID
+        }
+    }
+
+    #   Setup the Output object to hold information on the objects built
+    #
+    $PVOutput = [PSCustomObject]@{
+        Cycle       = $PVCycle
+        ViewName    = $null
+        ViewScript  = $null
+        SeqName     = $null
+        SeqScript   = $null
+        SeqALter    = $null
+        PVTableList = @()
+    }
+        
+
+    #   Build the table creation script template
+    #
     try {
         #
         #   Validate the 
@@ -264,49 +314,71 @@ function Install_PVTables {
     catch {
         return $null
     }
+        $ConnString = "Server=$($InstanceName);Database=$($DatabaseName);Integrated Security=True"
 
+    #   Insert a Comment seperation at the top of the "create table" script as a visual cue"
     #
-    #  TODO: Function to generate PV table with PVCycle
-    #
-    function local:GenPVTable {
-        param(
-            [string] $CTScript,
-            [string] $TableSchema,
-            [string] $TableName,
-            [int] $PVCycle,
-            [int] $Seq
-        )
-
-        $PVSchema = "PV_$($TableSchema)"
-        $OutScript = $CTScript -replace '<<SCHEMA>>', $PVSchema
-        $PVTableName = "$($TableName)_PV_$($PVCycle)_$($Seq)"
-        $OutScript = $Outscript -replace '<<TABLE>>', $PVTableName
-        return [PSCustomObject]@{
-            PVCreate = $OutScript
-            PVSchema = $PVSchema
-            PVTable  = $PVTableName
-        }
-    }
-
+    $tblScripts.Create = "-- ################################################ `r`n--  Table: [<<SCHEMA>>].[<<TABLE>>] `r`n-- ################################################ `r`n" + `
+                            $tblScripts.Create
 
     #   TODO: Create Identity ==> Sequence
     #
     $IdentityColInfo = $tblScripts.ColInfo | Where-object Identity 
     if ($IdentityColInfo) {
+        # Script out the SEQUENCE build command
+        #
         $sqlCreateSequence = "CREATE SEQUENCE [$($TableSchema)].[seq_$($TableName)] AS BIGINT START WITH 1 INCREMENT BY 1 MINVALUE 1; `r`n"
-        $sqlAddColSequence = "ALTER TABLE [<<SCHEMA>>].[<<TABLE>>] ADD CONSTRAINT [DF_SEQ_$($IdentityColInfo.Name)] DEFAULT NEXT VALUE FOR [$($TableSchema)].[seq_$($TableName)] FOR [$($IdentityColInfo.Name)]`r`n"
-        $tblScripts.Create = $tblScripts.Create + $sqlAddColSequence
+        $PVOutput.SeqScript = $sqlCreateSequence
+
+        #   Each PV table will need the previous IDENTITY column altered to use a DEFAULT value from the new SEQUENCE
+        #
+        $sqlAddDefaultSequence = "
+                ALTER TABLE [<<SCHEMA>>].[<<TABLE>>] ADD  CONSTRAINT [DF_SEQ_$($IdentityColInfo.Name)] DEFAULT NEXT VALUE FOR [$($TableSchema)].[seq_$($TableName)] FOR [$($IdentityColInfo.Name)]`r`n"
+        $tblScripts.Create = $tblScripts.Create + $sqlAddDefaultSequence
+        $PVOutput.SeqALter = $sqlAddDefaultSequence
     }
+
+    #   TODO: Load the proposed partitioning plan for the table creation phase
+    # 
+    $sqlPVPlan = "
+    SELECT  [ID]
+            ,[DatabaseName]
+            ,[SchemaName]
+            ,[TableName]
+            ,[ColumnName]
+            ,[PVCycle]
+            ,[Seq]
+            ,[MinCheckVal]
+            ,[MaxCheckVal]
+            ,[CheckExpr]
+            ,[RepCnt]
+            ,[RowCnt]
+        FROM [ReliabilityDB].[DBA].[PV_Config]"
+
+    $rsPVPlan = Invoke-SqlCmd -ServerInstance "PBG1SQL01V001.fs.local" -Query $sqlPVPlan
+
+    #$minMax = $rsPVPlan | Select-Object -Property MinValue, MaxValue -first 1
+    $minValue = $rsPVPlan | Measure-Object -Property MinCheckVal -Minimum
+    $maxValue = $rsPVPlan | Measure-Object -Property MaxCheckVal -Maximum
+
+
     
     #   TODO: Create PV Table PRE
     #
-    $TablePRE = GenPVTable -CTScript $tblScripts.Create -TableSchema $TableSchema -TableName $TableName -PVCycle $PVCycle -Seq 0
+    $TablePRE = GenPVTable -CTScript $tblScripts.Create -TableSchema $TableSchema -TableName $TableName -PVCycle $PVCycle -Seq 0 -ConnStr $ConnString
+    $PVOutput.PVTableList += $TablePRE
 
-    #
     #   TODO: Create PV Tables 1 - X
     #
+    foreach ($pv in ($rsPVPlan | Sort-Object MinValue)) {
+
+    }
+
+
     #   TODO: Create PV Table POST
     #
+    $TablePOST = GenPVTable -CTScript $tblScripts.Create -TableSchema $TableSchema -TableName $TableName -PVCycle $PVCycle -Seq 9999
+
     #   TODO: Create PV View (Schemabinding)
     #
     #   TODO: Create synonym to the PV View
