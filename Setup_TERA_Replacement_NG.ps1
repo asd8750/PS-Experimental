@@ -1,28 +1,19 @@
 
 Import-Module SqlServer;
 
-function Deploy-NewAGNode  {
+function Deploy-AdditionalAGNode  {
     <#
 .SYNOPSIS
 
-Connect to the local domain master server and retrieve the deployment configuration information
+Add a new server/instance to an existing AG configuration in the same cluster
 
 .DESCRIPTION
 
 Return a PSObject with deployment configuration information
 
-
-
 .PARAMETER FullInstanceName
 Specifies the Fully qualified SQL Server instance name of the domain master job server 
 
-.PARAMETER Database
-Specifies the database name of the deployment control database.  
-Default is 'FSDeployDB'
-
-.INPUTS
-
-None. You cannot pipe objects to Checkpoint-FSDeployDirectories
 
 .OUTPUTS
 
@@ -171,11 +162,11 @@ PS> Get-FSDeploymentConfig -FullInstanceName 'EDR1SQL01S003.fs.local\DBA'
             $OldInstanceName = $oInfo.ServerName;
             $OldDataPath = $oInfo.DataPath;
             Write-Verbose "--- Old:  SQL - Data Path '$($OldDataPath)'"
-            if ($OldSqlVersion.Split('.')[0] -ge '13') {
-                Write-Verbose "--- Old:  SQL - Version $($OldSqlVersion) - Correct!! >= 2016"
+            if ($OldSqlVersion.Split('.')[0] -eq '13') {
+                Write-Verbose "--- Old:  SQL - Version $($OldSqlVersion) - Correct!! SQL 2016"
             }
             else {
-                Write-Error "--- Old:  SQL - Incorrect Version - $($OldSqlVersion)"
+                Write-Error "--- Old:  SQL - Incorrect Version - $(OldSqlVersion)"
             }
     }
     catch {
@@ -1096,13 +1087,13 @@ PS> Get-FSDeploymentConfig -FullInstanceName 'EDR1SQL01S003.fs.local\DBA'
                             FOR 
                                 REPLICA ON N'$($ag.AGPrimaryNode)' 
                                     WITH (ENDPOINT_URL = N'TCP://$($ag.AGPrimaryNode).$($ClsDomain):$($AGRepl.MirPort)', 
-                                        FAILOVER_MODE = MANUAL, -- $($AGRepl.FailoverMode), 
-                                        AVAILABILITY_MODE = ASYNCHRONOUS_COMMIT, -- $($AGRepl.AvailabilityMode), 
+                                        FAILOVER_MODE = $($AGRepl.FailoverMode), 
+                                        AVAILABILITY_MODE = $($AGRepl.AvailabilityMode), 
                                         SESSION_TIMEOUT = $($AGRepl.SessionTimeout), 
                                         BACKUP_PRIORITY = $($AGRepl.BackupPrio), 
                                         PRIMARY_ROLE(ALLOW_CONNECTIONS = $($AGRepl.AllowPrimConn)), 
                                         SECONDARY_ROLE(ALLOW_CONNECTIONS = $($AGRepl.AllowSecConn)),
-                                        SEEDING_MODE = MANUAL  --  $($AGRepl.SeedingMode))
+                                        SEEDING_MODE = $($AGRepl.SeedingMode))
                             $($SqlListener);
                         PRINT 'AG [$($AGRepl.AGName)] created'
                     END TRY
@@ -1401,7 +1392,7 @@ PS> Get-FSDeploymentConfig -FullInstanceName 'EDR1SQL01S003.fs.local\DBA'
 
 }
 
-Deploy-NewAGNode  -OldFullInstanceName "PBG1SQL01T314.fs.local" -NewFullInstanceName  "PBG2SQL01T304.fs.local"  -Phase 4 -Verbose -DebugLevel 2 -GeneratedOutputDir "C:\Downloads\"
+Deploy-NewAGNode  -OldFullInstanceName "PBG1SQL01T001.fs.local" -NewFullInstanceName  "PBG2SQL01T011.fs.local"  -Phase 1 -Verbose -DebugLevel 2 -GeneratedOutputDir "C:\Downloads\"
 
 #Deploy-NewAGNode  -OldFullInstanceName "PBG2SQL20T104.mfg.fs" -NewFullInstanceName  "PBG2SQL20T114.mfg.fs"  -Phase 5 -Verbose -DebugLevel 2 -GeneratedOutputDir "E:\Backup\"
 

@@ -81,7 +81,7 @@ foreach ($db in ($dbList | Where-Object {$_.DatabaseName -like 'Performance*'} |
                 $sqlCmdAPF = "ALTER PARTITION FUNCTION [$($Pt.FuncName)]() SPLIT RANGE ('$($NewDateStr)'); `r`n"
                 Write-Verbose "SQL-> $($sqlCmdAPF)"
                 $sqlCmd = $sqlCmd + $sqlCmdAPF
-                Invoke-DbaQuery -SqlInstance $InstanceName -Database $db.DatabaseName -Query $sqlCmd -QueryTimeout 1800          
+                #Invoke-DbaQuery -SqlInstance $InstanceName -Database $db.DatabaseName -Query $sqlCmd -QueryTimeout 1800          
                 }
             }
         }
