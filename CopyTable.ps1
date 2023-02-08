@@ -234,32 +234,6 @@ if (($Phase -ieq "Script") -or ($Phase -ieq "Create")) {
     $sOut2 = Get-Content -Path $scrOutput.FullName 
     $srcFullTableNameMask = "\[$($srcSchema)\].\[$($srcTable)\]"  # Add escape character to allow matching brackets
 
-    #   Script out the statistics create commands
-    #
-    $cStsOut = $srcTabInfo.Statistics | Sort-Object ID | foreach-Object { 
-        $stsName = $_.name
-        $stsCols = ($_.StatisticColumns | Sort-Object ID | Select-Object Name).Name -join ", "
-        if ($stsName -ilike "_WA_Sys_*") { $stsName = "STS_$($srcTabInfo.Name)_$(($stsCols -replace ',','_'))"}
-        $thisIndex = ($srcTabInfo.Indexes | Where-Object { $_.Name -ieq $stsName  } )  # Get the index info if this statistic is created by the index itself
-        if ($null -eq $thisIndex) {
-            $stsCreate = "CREATE STATISTICS [$($stsName)] ON [$($srcTabInfo.Schema)].[$($srcTabInfo.Name)]"
-            $stsCreate = $stsCreate + "  (" + $stsCols + ") "
-            if ($destIncremental) {
-                $stsCreate = $stsCreate + " WITH INCREMENTAL = ON, PERSIST_SAMPLE_PERCENT = ON, SAMPLE $($destSamplePct) PERCENT "
-            $stsCreate = $stsCreate + ";"
-            }
-            $stsCreate    
-        } elseif (-not $thisIndex[0].IndexType -ilike "*ColumnStore*") {
-            $stsCreate = "UPDATE STATISTICS [$($srcTabInfo.Schema)].[$($srcTabInfo.Name)]([$($stsName)]) "
-            if ($destIncremental) {
-                $stsCreate = $stsCreate + " WITH INCREMENTAL = ON, PERSIST_SAMPLE_PERCENT = ON, SAMPLE $($destSamplePct) PERCENT "
-            $stsCreate = $stsCreate + ";" 
-            }           
-            $stsCreate    
-        } 
-
-    }
-
     #   Combine the script lists and perform text substitutions
     #
     $sOut3 = $sOut2 + $cStsOut
