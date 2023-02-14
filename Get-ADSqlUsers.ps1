@@ -15,17 +15,19 @@ $DateCollected = Get-Date
 #   Get the list of AD objects referenced in our SQL instances
 #
 $sqlFetchSqlADLogins = "
-    SELECT	DISTINCT
-            ServerDomain,
-            LoginName,
-            LEFT(ServerDomain,CHARINDEX('.',ServerDomain)-1) AS Domain,
-            RIGHT(LoginName, LEN(LoginName) - CHARINDEX('\',LoginName)) AS AcctName,
-            LoginSType,
-            sid
-        FROM MonitorData.ServerLogins
-        WHERE (LoginSType IN ('G', 'U'))
-            AND (LEFT(ServerDomain,CHARINDEX('.',ServerDomain)-1) + '\') = LEFT(LoginName,CHARINDEX('.',ServerDomain))
-            AND ('<<Domain>>' = LEFT(ServerDomain,CHARINDEX('.',ServerDomain)-1))
+SELECT  DISTINCT
+        SL.ServerName,
+        SL.ServerDomain,
+        SL.LoginName,
+        LEFT(SL.ServerDomain,CHARINDEX('.',SL.ServerDomain)-1) AS Domain,
+        RIGHT(SL.LoginName, LEN(SL.LoginName) - CHARINDEX('\',SL.LoginName)) AS AcctName,
+        SL.LoginSType,
+        SL.sid
+    FROM MonitorData.ServerLogins SL
+    INNER JOIN Monitor.tvfFetchInfo_MostRecentImportByTName('ServerLogins', DEFAULT) MRI
+        ON (SL.__ImportCycle__ = MRI.ImportCycle)
+    WHERE (LoginSType IN ('G', 'U'))
+
 ";
 
 $sqlQuery = $sqlFetchSqlADLogins.Replace('<<Domain>>', $MyDomain)
