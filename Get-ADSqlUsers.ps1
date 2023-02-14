@@ -1,5 +1,6 @@
 Import-Module ActiveDirectory
 #Import-Module SqlServer
+Import-module FS_Deployment
 
 Add-Type -AssemblyName System.DirectoryServices
 Add-Type -AssemblyName System.DirectoryServices.AccountManagement
@@ -122,7 +123,7 @@ foreach ($login in ($SqlLogins | Where-Object LoginSType -ne "G" )) {
         default {
             if ($adu.ObjectClass) {
                 $adInfo.ObjType = $adu.ObjectClass
-            } elsem {
+            } else {
                 $adInfo.ObjType = "unknown"
             }       
             $adInfo.DisplayName     = ''

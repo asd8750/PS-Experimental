@@ -2,7 +2,15 @@
 	"folders": [
 		{
 			"path": ".."
+		},
+		{
+			"path": "../../FS_Deployment"
+		},
+		{
+			"path": "../../SSMSLocalTemplates"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"powershell.cwd": "c:\\Projects\\GitHub\\PS-Experimental"
+	}
 }
