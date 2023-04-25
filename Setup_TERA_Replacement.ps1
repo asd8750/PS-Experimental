@@ -1401,7 +1401,7 @@ PS> Get-FSDeploymentConfig -FullInstanceName 'EDR1SQL01S003.fs.local\DBA'
 
 }
 
-Deploy-NewAGNode  -OldFullInstanceName "PBG1SQL01T314.fs.local" -NewFullInstanceName  "PBG2SQL01T304.fs.local"  -Phase 4 -Verbose -DebugLevel 2 -GeneratedOutputDir "C:\Downloads\"
+Deploy-NewAGNode  -OldFullInstanceName "PKM1SQL01T104.fs.local" -NewFullInstanceName  "PKM2SQL01T104.fs.local"  -Phase 6 -Verbose -DebugLevel 2 -GeneratedOutputDir "C:\Temp\PMT1\"
 
 #Deploy-NewAGNode  -OldFullInstanceName "PBG2SQL20T104.mfg.fs" -NewFullInstanceName  "PBG2SQL20T114.mfg.fs"  -Phase 5 -Verbose -DebugLevel 2 -GeneratedOutputDir "E:\Backup\"
 

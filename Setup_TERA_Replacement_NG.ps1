@@ -104,6 +104,9 @@ PS> Get-FSDeploymentConfig -FullInstanceName 'EDR1SQL01S003.fs.local\DBA'
         "DMT" {
             $PlantCode = "DMT" + $OldInstName.Substring(10,1)
         }
+        "PKM" {
+            $PlantCode = "PMT" + $OldInstName.Substring(10,1)
+        }
     }
 
 
@@ -162,7 +165,7 @@ PS> Get-FSDeploymentConfig -FullInstanceName 'EDR1SQL01S003.fs.local\DBA'
             $OldInstanceName = $oInfo.ServerName;
             $OldDataPath = $oInfo.DataPath;
             Write-Verbose "--- Old:  SQL - Data Path '$($OldDataPath)'"
-            if ($OldSqlVersion.Split('.')[0] -eq '13') {
+            if ($OldSqlVersion.Split('.')[0] -ge '13') {
                 Write-Verbose "--- Old:  SQL - Version $($OldSqlVersion) - Correct!! SQL 2016"
             }
             else {
@@ -186,7 +189,7 @@ PS> Get-FSDeploymentConfig -FullInstanceName 'EDR1SQL01S003.fs.local\DBA'
         $NewInstanceName = $nInfo.ServerName;
         $NewDataPath = $nInfo.DataPath;
         Write-Verbose "--- New:  SQL - Data Path '$($NewDataPath)'"
-        if ($NewSqlVersion.Split('.')[0] -eq '15') {
+        if ($NewSqlVersion.Split('.')[0] -ge '15') {
             Write-Verbose "--- New:  SQL - Version $($NewSqlVersion) - Correct!! SQL 2019"
         }
         else {
@@ -1392,7 +1395,7 @@ PS> Get-FSDeploymentConfig -FullInstanceName 'EDR1SQL01S003.fs.local\DBA'
 
 }
 
-Deploy-NewAGNode  -OldFullInstanceName "PBG1SQL01T001.fs.local" -NewFullInstanceName  "PBG2SQL01T011.fs.local"  -Phase 1 -Verbose -DebugLevel 2 -GeneratedOutputDir "C:\Downloads\"
+Deploy-AdditionalAGNode  -OldFullInstanceName "PKM2SQL01T104.fs.local" -NewFullInstanceName  "PKM1SQL01T104.fs.local"  -Phase 3 -Verbose -DebugLevel 2 -GeneratedOutputDir "C:\Downloads\"
 
 #Deploy-NewAGNode  -OldFullInstanceName "PBG2SQL20T104.mfg.fs" -NewFullInstanceName  "PBG2SQL20T114.mfg.fs"  -Phase 5 -Verbose -DebugLevel 2 -GeneratedOutputDir "E:\Backup\"
 
